@@ -88,9 +88,13 @@ jobs:
         sudo apt install -y software-properties-common
         sudo add-apt-repository -y ppa:deadsnakes/ppa
         sudo apt update
-        sudo apt install -y python2.7 python-is-python2
+        sudo apt install -y python2.7 python2.7-dev
+        # Create python symlink manually since python-is-python2 is unavailable
         sudo ln -sf /usr/bin/python2.7 /usr/bin/python
         sudo ln -sf /usr/bin/python2.7 /usr/bin/python2
+        # Verify
+        python --version
+        python2 --version
 
     - name: Install OpenJDK
       uses: actions/setup-java@v4
