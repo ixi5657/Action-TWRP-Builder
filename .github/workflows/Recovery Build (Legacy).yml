@@ -82,6 +82,16 @@ jobs:
             libwxgtk3.0-gtk3-dev libxml2 lzop pngcrush schedtool squashfs-tools \
             imagemagick libbz2-dev lzma ncftp qemu-user-static libstdc++-10-dev libncurses5 python3 tar
 
+    - name: Setup Python 2
+      run: |
+        sudo apt update
+        sudo apt install -y software-properties-common
+        sudo add-apt-repository -y ppa:deadsnakes/ppa
+        sudo apt update
+        sudo apt install -y python2.7 python-is-python2
+        sudo ln -sf /usr/bin/python2.7 /usr/bin/python
+        sudo ln -sf /usr/bin/python2.7 /usr/bin/python2
+
     - name: Install OpenJDK
       uses: actions/setup-java@v4
       with:
@@ -121,8 +131,10 @@ jobs:
 
     - name: Clone device tree
       run: |
-        git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
+        mkdir -p device/$(dirname ${{ github.event.inputs.DEVICE_PATH }})
+        git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./device/${{ github.event.inputs.DEVICE_PATH }}
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
 
     - name: Clone common tree
       if: |
