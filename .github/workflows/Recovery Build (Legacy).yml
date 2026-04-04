@@ -10,23 +10,36 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Cleanup disk space (Host)
+      - name: Cleanup disk space (removes ~20GB)
         uses: rokibhasansagar/slimhub_actions@main
       
+      - name: Reinstall Docker (removed by cleanup)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq apt-transport-https ca-certificates curl gnupg lsb-release
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io
+          
+      - name: Verify Docker
+        run: sudo docker --version
+        
       - name: Checkout repository
         uses: actions/checkout@v4
         
       - name: Start Ubuntu 18.04 Container
         run: |
-          docker run -d --name twrp-builder \
+          sudo docker run -d --name twrp-builder \
             -v "$(pwd):/workspace" \
+            -v "/twrp:/twrp" \
             -w /workspace \
             ubuntu:18.04 \
             tail -f /dev/null
           
       - name: Install build dependencies (in container)
         run: |
-          docker exec twrp-builder bash -c "
+          sudo docker exec twrp-builder bash -c "
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
             apt-get install -y -qq \
@@ -36,12 +49,12 @@ jobs:
               lib32ncurses5-dev x11proto-core-dev libx11-dev \
               lib32z1-dev ccache libgl1-mesa-dev libxml2-utils \
               xsltproc unzip python openjdk-8-jdk bc liblz4-tool \
-              libncurses5-dev libssl-dev
+              libncurses5-dev libssl-dev wget
           "
           
       - name: Setup Git and Repo (in container)
         run: |
-          docker exec twrp-builder bash -c "
+          sudo docker exec twrp-builder bash -c "
             git config --global user.name 'GitHub Actions'
             git config --global user.email 'actions@github.com'
             curl -s https://storage.googleapis.com/git-repo-downloads/repo > /usr/local/bin/repo
@@ -50,24 +63,23 @@ jobs:
           
       - name: Sync TWRP sources (in container)
         run: |
-          docker exec twrp-builder bash -c "
-            mkdir -p /twrp
+          sudo docker exec twrp-builder bash -c "
             cd /twrp
             repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git -b twrp-7.1
             repo sync -c --force-sync --no-tags --no-clone-bundle --prune -j\$(nproc --all)
           "
-        timeout-minutes: 120
+        timeout-minutes: 180
         
       - name: Clone device tree (in container)
         run: |
-          docker exec twrp-builder bash -c "
+          sudo docker exec twrp-builder bash -c "
             mkdir -p /twrp/device/tcl
             git clone --depth=1 https://github.com/ixi5657/alcatel-1c-device-tree.git /twrp/device/tcl/U5A_PLUS_3G
           "
           
       - name: Build recovery (in container)
         run: |
-          docker exec twrp-builder bash -c "
+          sudo docker exec twrp-builder bash -c "
             cd /twrp
             source build/envsetup.sh
             lunch omni_U5A_PLUS_3G-eng
@@ -76,7 +88,7 @@ jobs:
           
       - name: Extract recovery image from container
         run: |
-          docker cp twrp-builder:/twrp/out/target/product/U5A_PLUS_3G/recovery.img ./TWRP_U5A_PLUS_3G.img
+          sudo docker cp twrp-builder:/twrp/out/target/product/U5A_PLUS_3G/recovery.img ./TWRP_U5A_PLUS_3G.img
           ls -lh ./TWRP_U5A_PLUS_3G.img
           
       - name: Upload Recovery Image
@@ -86,9 +98,9 @@ jobs:
           path: TWRP_U5A_PLUS_3G.img
           if-no-files-found: error
           
-      - name: Cleanup Docker container
+      - name: Cleanup Docker
         if: always()
         run: |
-          docker stop twrp-builder || true
-          docker rm twrp-builder || true
-          docker rmi ubuntu:18.04 || true
+          sudo docker stop twrp-builder || true
+          sudo docker rm twrp-builder || true
+          sudo docker rmi ubuntu:18.04 || true
