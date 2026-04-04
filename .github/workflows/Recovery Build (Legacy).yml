@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Cleanup disk space (removes ~20GB)
+      - name: Cleanup disk space (Host)
         uses: rokibhasansagar/slimhub_actions@main
       
       - name: Reinstall Docker (removed by cleanup)
@@ -25,15 +25,12 @@ jobs:
       - name: Verify Docker
         run: sudo docker --version
         
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        
       - name: Start Ubuntu 18.04 Container
         run: |
           sudo docker run -d --name twrp-builder \
-            -v "$(pwd):/workspace" \
+            --privileged \
             -v "/twrp:/twrp" \
-            -w /workspace \
+            -w /twrp \
             ubuntu:18.04 \
             tail -f /dev/null
           
@@ -41,6 +38,7 @@ jobs:
         run: |
           sudo docker exec twrp-builder bash -c "
             export DEBIAN_FRONTEND=noninteractive
+            dpkg --add-architecture i386
             apt-get update -qq
             apt-get install -y -qq \
               git-core gnupg flex bison gperf libsdl1.2-dev \
@@ -73,8 +71,15 @@ jobs:
       - name: Clone device tree (in container)
         run: |
           sudo docker exec twrp-builder bash -c "
-            mkdir -p /twrp/device/tcl
-            git clone --depth=1 https://github.com/ixi5657/alcatel-1c-device-tree.git /twrp/device/tcl/U5A_PLUS_3G
+            mkdir -p /twrp/device/tcl/U5A_PLUS_3G
+            cd /tmp
+            git clone --depth=1 https://github.com/ixi5657/alcatel-1c-device-tree.git device-temp
+            cp -r device-temp/* /twrp/device/tcl/U5A_PLUS_3G/
+            rm -rf device-temp
+            echo '=== Device tree content ==='
+            ls -la /twrp/device/tcl/U5A_PLUS_3G/
+            echo '=== Checking BoardConfig.mk ==='
+            cat /twrp/device/tcl/U5A_PLUS_3G/BoardConfig.mk | head -20
           "
           
       - name: Build recovery (in container)
@@ -88,6 +93,7 @@ jobs:
           
       - name: Extract recovery image from container
         run: |
+          sudo docker cp twrp-builder:/twrp/out/target/product/U5A_PLUS_3G/recovery.img ./TWRP_U5A_PLUS_3G.img || \
           sudo docker cp twrp-builder:/twrp/out/target/product/U5A_PLUS_3G/recovery.img ./TWRP_U5A_PLUS_3G.img
           ls -lh ./TWRP_U5A_PLUS_3G.img
           
