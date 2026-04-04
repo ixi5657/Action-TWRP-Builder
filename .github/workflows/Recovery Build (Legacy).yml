@@ -71,15 +71,40 @@ jobs:
       - name: Clone device tree (in container)
         run: |
           sudo docker exec twrp-builder bash -c "
-            mkdir -p /twrp/device/tcl/U5A_PLUS_3G
+            # Очищаем старое
+            rm -rf /twrp/device/tcl/U5A_PLUS_3G
+            
+            # Создаем базовую директорию
+            mkdir -p /twrp/device/tcl
+            
+            # Клонируем во временную папку
             cd /tmp
-            git clone --depth=1 https://github.com/ixi5657/alcatel-1c-device-tree.git device-temp
-            cp -r device-temp/* /twrp/device/tcl/U5A_PLUS_3G/
-            rm -rf device-temp
-            echo '=== Device tree content ==='
+            rm -rf alcatel-1c-device-tree
+            git clone --depth=1 https://github.com/ixi5657/alcatel-1c-device-tree.git
+            
+            # Проверяем структуру (в репо есть вложенная папка device/tcl/U5A_PLUS_3G/)
+            echo '=== Repo structure ==='
+            find /tmp/alcatel-1c-device-tree -maxdepth 3 -type d
+            
+            # Копируем из вложенной папки device/tcl/U5A_PLUS_3G/ в целевую
+            if [ -d /tmp/alcatel-1c-device-tree/device/tcl/U5A_PLUS_3G ]; then
+              cp -r /tmp/alcatel-1c-device-tree/device/tcl/U5A_PLUS_3G /twrp/device/tcl/
+              echo '=== Copied from nested path ==='
+            else
+              # Fallback: если структура плоская
+              mkdir -p /twrp/device/tcl/U5A_PLUS_3G
+              cp -r /tmp/alcatel-1c-device-tree/* /twrp/device/tcl/U5A_PLUS_3G/
+              echo '=== Copied from root ==='
+            fi
+            
+            # Очищаем
+            rm -rf /tmp/alcatel-1c-device-tree
+            
+            echo '=== Final device tree structure ==='
             ls -la /twrp/device/tcl/U5A_PLUS_3G/
-            echo '=== Checking BoardConfig.mk ==='
-            cat /twrp/device/tcl/U5A_PLUS_3G/BoardConfig.mk | head -20
+            
+            echo '=== Checking omni_U5A_PLUS_3G.mk ==='
+            cat /twrp/device/tcl/U5A_PLUS_3G/omni_U5A_PLUS_3G.mk
           "
           
       - name: Build recovery (in container)
@@ -87,13 +112,15 @@ jobs:
           sudo docker exec twrp-builder bash -c "
             cd /twrp
             source build/envsetup.sh
+            
+            # Запускаем lunch для нашего устройства
             lunch omni_U5A_PLUS_3G-eng
+            
             make recoveryimage -j\$(nproc --all)
           "
           
       - name: Extract recovery image from container
         run: |
-          sudo docker cp twrp-builder:/twrp/out/target/product/U5A_PLUS_3G/recovery.img ./TWRP_U5A_PLUS_3G.img || \
           sudo docker cp twrp-builder:/twrp/out/target/product/U5A_PLUS_3G/recovery.img ./TWRP_U5A_PLUS_3G.img
           ls -lh ./TWRP_U5A_PLUS_3G.img
           
